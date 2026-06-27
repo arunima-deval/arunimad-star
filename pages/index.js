@@ -505,6 +505,8 @@ export default function Home() {
   const [selectedPpeRev, setSelectedPpeRev] = useState([])
   const [selectedRdRev, setSelectedRdRev] = useState([])
   const [selectedRoic, setSelectedRoic] = useState([])
+  const [selectedTamGrowth, setSelectedTamGrowth] = useState([])
+  const [mktShareGainFilter, setMktShareGainFilter] = useState(false)
   const [watchlistSides, setWatchlistSides] = useState({})
   const [sortBy, setSortBy] = useState(null)
   const [sortAsc, setSortAsc] = useState(true)
@@ -565,6 +567,10 @@ export default function Home() {
   const [signalsLoading, setSignalsLoading] = useState(false)
   const [signalsPanelOpen, setSignalsPanelOpen] = useState(null)
   const [snapshotData, setSnapshotData] = useState(null)
+  const [hfHoldings, setHfHoldings] = useState(null)
+  const [hfLoading, setHfLoading] = useState(false)
+  const [congressTrades, setCongressTrades] = useState(null)
+  const [congressLoading, setCongressLoading] = useState(false)
   const [managementData, setManagementData] = useState(null)
   const [tenkData, setTenkData] = useState(null)
   const [tenkLoading, setTenkLoading] = useState(false)
@@ -992,6 +998,34 @@ export default function Home() {
       .finally(() => setInsiderLoading(false))
   }, [selectedRow?.name])
 
+  // Fetch HF 13F holdings whenever the selected row changes
+  useEffect(() => {
+    if (!selectedRow) { setHfHoldings(null); return }
+    const ticker = getTickerSymbol(selectedRow.exchangeTicker || selectedRow.securityTickers)
+    if (!ticker) return
+    setHfHoldings(null)
+    setHfLoading(true)
+    fetch(`/api/hf-holdings?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => r.json())
+      .then(d => setHfHoldings(d))
+      .catch(() => {})
+      .finally(() => setHfLoading(false))
+  }, [selectedRow?.name])
+
+  // Fetch congressional trades whenever the selected row changes
+  useEffect(() => {
+    if (!selectedRow) { setCongressTrades(null); return }
+    const ticker = getTickerSymbol(selectedRow.exchangeTicker || selectedRow.securityTickers)
+    if (!ticker) return
+    setCongressTrades(null)
+    setCongressLoading(true)
+    fetch(`/api/congress-trades?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => r.json())
+      .then(d => setCongressTrades(d))
+      .catch(() => {})
+      .finally(() => setCongressLoading(false))
+  }, [selectedRow?.name])
+
   // Fetch 8-K earnings call highlights whenever the selected row changes
   useEffect(() => {
     if (!selectedRow) { setEarningsCall(null); return }
@@ -1265,6 +1299,11 @@ export default function Home() {
     { id: 'roic_low',  label: '0–8% (below WACC)',       min: 0,  max: 8 },
     { id: 'roic_mid',  label: '8–20% (above WACC)',      min: 8,  max: 20 },
     { id: 'roic_high', label: '> 20% (compounder)',      min: 20, max: Infinity },
+  ]
+  const tamGrowthCategories = [
+    { id: 'tam_fast', label: '> 10% CAGR', min: 10, max: Infinity },
+    { id: 'tam_mid',  label: '6–10% CAGR', min: 6,  max: 10 },
+    { id: 'tam_slow', label: '< 6% CAGR',  min: 0,  max: 6 },
   ]
 
   const inMarketCapCategory = (marketCap, cat) => {
@@ -1618,7 +1657,24 @@ export default function Home() {
         return cat && v >= cat.min && v < cat.max
       })
     })()
-    return sectorOk && exchangeOk && mcOk && siOk && dflOk && gmOk && omOk && nmOk && betaOk && velOk && sentOk && insiderOk && sigOk && presetOk && cfoOk && sbcRevOk && hfOwnOk && analystsOk && ppeRevOk && rdRevOk && roicOk
+    const tamGrowthOk = selectedTamGrowth.length === 0 || (() => {
+      const tamInfo = INDUSTRY_TAM[row.primaryIndustry] || SECTOR_TAM[row.primarySector]
+      if (!tamInfo) return true
+      const cagr = parseFloat(tamInfo.cagr)
+      if (isNaN(cagr)) return true
+      return selectedTamGrowth.some(id => {
+        const cat = tamGrowthCategories.find(c => c.id === id)
+        return cat && cagr >= cat.min && cagr < cat.max
+      })
+    })()
+    const mktShareGainOk = !mktShareGainFilter || (() => {
+      const summary = allSignalsCache[rowTicker(row)]
+      if (!summary || summary.revGrowth == null) return true
+      const tamInfo = INDUSTRY_TAM[row.primaryIndustry] || SECTOR_TAM[row.primarySector]
+      const tamCagr = tamInfo ? parseFloat(tamInfo.cagr) : 5
+      return summary.revGrowth > (isNaN(tamCagr) ? 5 : tamCagr)
+    })()
+    return sectorOk && exchangeOk && mcOk && siOk && dflOk && gmOk && omOk && nmOk && betaOk && velOk && sentOk && insiderOk && sigOk && presetOk && cfoOk && sbcRevOk && hfOwnOk && analystsOk && ppeRevOk && rdRevOk && roicOk && tamGrowthOk && mktShareGainOk
   })
   const displayedCount = filteredData.length
 
@@ -1750,6 +1806,9 @@ export default function Home() {
             hasGreen:  inCat.some(s => s.severity === 'green'),
           }
         }
+        const revArr = (json?.annual?.revenues || []).filter(v => v != null)
+        const rCurr = revArr.at(-1), rPrev = revArr.at(-2)
+        const revGrowth = rCurr != null && rPrev != null && rPrev !== 0 ? (rCurr - rPrev) / Math.abs(rPrev) * 100 : null
         setAllSignalsCache(prev => ({
           ...prev,
           [ticker]: {
@@ -1758,6 +1817,7 @@ export default function Home() {
             hasGreen:  triggered.some(s => s.severity === 'green'),
             categories: cats,
             titles: triggered.map(s => s.title),
+            revGrowth,
           }
         }))
       } catch {}
@@ -1784,6 +1844,8 @@ export default function Home() {
     setSelectedPpeRev([])
     setSelectedRdRev([])
     setSelectedRoic([])
+    setSelectedTamGrowth([])
+    setMktShareGainFilter(false)
     setSelectedVelocity([])
     setSelectedSentiment([])
     setInsiderFilter(null)
@@ -2164,11 +2226,11 @@ export default function Home() {
         const activeIsLong = activePresetId ? isLong(activePresetId) : null
 
         const renderRow = (presets, side) => {
-          const accentActive = side === 'long' ? '#059669' : '#dc2626'
+          const accentActive = side === 'long' ? '#15803d' : '#dc2626'
           const accentText   = side === 'long' ? '#6b7280' : '#9ca3af'
           return (
             <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: '0.58rem', color: accentText, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              <div style={{ fontSize: '0.68rem', color: accentText, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                 {side === 'long' ? '▲ Long' : '▼ Short'}
               </div>
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -2188,7 +2250,7 @@ export default function Home() {
                       }}
                     >
                       <span style={{ fontSize: '0.66rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
-                      <span style={{ fontSize: '0.58rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.35, whiteSpace: 'normal' }}>{ps.desc}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.35, whiteSpace: 'normal' }}>{ps.desc}</span>
                     </button>
                   )
                 })}
@@ -2198,7 +2260,7 @@ export default function Home() {
         }
 
         const active = allPresets.find(p => p.id === activePresetId)
-        const activeAccent = activeIsLong ? '#059669' : '#dc2626'
+        const activeAccent = activeIsLong ? '#15803d' : '#dc2626'
         const activeBg    = activeIsLong ? '#f0fdf4' : '#fff5f5'
         const activeBorder= activeIsLong ? '#bbf7d0' : '#fecaca'
 
@@ -2316,7 +2378,7 @@ export default function Home() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 10px', background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 7, minWidth: 80 }}>
                   <span style={{ fontSize: '0.6rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Consensus</span>
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: consensus ? consColor : '#9ca3af', marginTop: 1 }}>{consensus || '-'}</span>
-                  {totalRecs > 0 && <span style={{ fontSize: '0.58rem', color: '#aaa' }}>{s.buy}B · {s.hold}H · {s.sell}S</span>}
+                  {totalRecs > 0 && <span style={{ fontSize: '0.68rem', color: '#9ca3af' }}>{s.buy}B · {s.hold}H · {s.sell}S</span>}
                 </div>
                 {/* Rating bar */}
                 {totalRecs > 0 && (
@@ -2374,9 +2436,9 @@ export default function Home() {
                 })()}
                 {sectorMetrics?.metrics?.length > 0 && sectorMetrics.metrics.map((m, i) => (
                   <div key={`sm-${i}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 10px', background: '#e8edf2', border: '1px solid #c8d4df', borderRadius: 7, minWidth: 60 }}>
-                    <span style={{ fontSize: '0.6rem', color: '#6b7a8d', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{m.label}</span>
+                    <span style={{ fontSize: '0.6rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{m.label}</span>
                     <span style={{ fontSize: '0.8rem', fontWeight: 700, color: m.highlight || '#1a2b3c', marginTop: 1 }}>{m.value || '-'}</span>
-                    {m.sub && <span style={{ fontSize: '0.6rem', color: '#6b7a8d' }}>{m.sub}</span>}
+                    {m.sub && <span style={{ fontSize: '0.6rem', color: '#6b7280' }}>{m.sub}</span>}
                   </div>
                 ))}
                 {/* ── Derived metrics ── */}
@@ -2395,7 +2457,7 @@ export default function Home() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 10px', background: '#f0f4ff', border: '1px solid #c7d5f5', borderRadius: 7, minWidth: 60 }}>
                       <span style={{ fontSize: '0.6rem', color: '#4b5ea8', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{label}</span>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: color || '#1a2b3c', marginTop: 1 }}>{val}</span>
-                      {sub && <span style={{ fontSize: '0.58rem', color: '#6b7a8d' }}>{sub}</span>}
+                      {sub && <span style={{ fontSize: '0.68rem', color: '#6b7280' }}>{sub}</span>}
                     </div>
                   )
                   const out = []
@@ -2462,7 +2524,7 @@ export default function Home() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
             {/* Description */}
             <div style={{ flex: 2, minWidth: 0 }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 5 }}>Business Overview</div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 5 }}>Business Overview</div>
               <p className="detail-description" style={{ margin: 0, marginBottom: selectedRow.website ? 4 : 0 }}>
                 {selectedRow.description || 'No description available.'}
               </p>
@@ -2564,7 +2626,7 @@ export default function Home() {
           {mounted && (
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'flex-start' }}>
             <div style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px', flexShrink: 0, width: '27%' }}>
-              <div className="detail-multiples-chart-title" style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>
                 Revenue Breakdown
                 {revenueSegments?.year && <span style={{ fontSize: '0.66rem', fontWeight: 400, color: '#9ca3af', marginLeft: 6 }}>{revenueSegments.year} · {revenueSegments.totalFmt}</span>}
               </div>
@@ -2666,7 +2728,7 @@ export default function Home() {
                   <div style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
                     <div role="button" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', background: '#fafafa', cursor: 'pointer', userSelect: 'none', borderBottom: isOpen ? '1px solid #eee' : 'none' }}
                       onClick={() => setSignalsPanelOpen(o => !(o === null ? reds.length > 0 : o))}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1f3b5d' }}>Financial Signals</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c' }}>Financial Signals</span>
                       <span style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 2 }}>
                         {reds.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e76f51', display: 'inline-block' }}/><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#e76f51' }}>{reds.length}</span></span>}
                         {yellows.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }}/><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#b45309' }}>{yellows.length}</span></span>}
@@ -2690,7 +2752,7 @@ export default function Home() {
                                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c' }}>{s.title}</span>
                                 <span style={{ fontSize: '0.6rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 2 }}>{s.category}</span>
                               </div>
-                              <div style={{ fontSize: '0.69rem', color: '#555', lineHeight: 1.4, paddingLeft: 17 }}>{s.detail}</div>
+                              <div style={{ fontSize: '0.69rem', color: '#374151', lineHeight: 1.4, paddingLeft: 17 }}>{s.detail}</div>
                             </div>
                           )
                         })}
@@ -2701,7 +2763,7 @@ export default function Home() {
                               <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#9ca3af' }}>{s.title}</span>
                               <span style={{ fontSize: '0.6rem', color: '#d1d5db', textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 2 }}>{s.category}</span>
                             </div>
-                            <div style={{ fontSize: '0.69rem', color: '#c0c4cc', fontStyle: 'italic', paddingLeft: 17, marginTop: 2 }}>Coming soon</div>
+                            <div style={{ fontSize: '0.69rem', color: '#9ca3af', fontStyle: 'italic', paddingLeft: 17, marginTop: 2 }}>Coming soon</div>
                           </div>
                         ))}
                       </div>
@@ -2720,15 +2782,9 @@ export default function Home() {
               <div style={{ flex: 2, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>Products &amp; Services</div>
                 {selectedRow.productDescription ? (() => {
-                  const text = selectedRow.productDescription
-                  const isLong = text.length > 500
                   return (
                     <div style={{ fontSize: '0.76rem', color: '#374151', lineHeight: 1.55 }}>
-                      <div style={!productsExpanded ? { display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}}>
-                        {text}
-                      </div>
-                      {isLong && !productsExpanded && <button type="button" onClick={() => setProductsExpanded(true)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.73rem', padding: '2px 0 0' }}>Read more…</button>}
-                      {isLong && productsExpanded && <button type="button" onClick={() => setProductsExpanded(false)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.73rem', padding: '2px 0 0' }}>Show less</button>}
+                      {selectedRow.productDescription}
                     </div>
                   )
                 })() : <div className="detail-multiples-empty">No product data in Capital IQ</div>}
@@ -2738,15 +2794,9 @@ export default function Home() {
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>Supply Chain</div>
                 {tenkLoading && <div className="detail-multiples-empty">Loading 10-K…</div>}
                 {!tenkLoading && tenkData?.supplyChain && (() => {
-                  const text = tenkData.supplyChain
-                  const isLong = text.length > 500
                   return (
                     <div style={{ fontSize: '0.76rem', color: '#374151', lineHeight: 1.55 }}>
-                      <div style={!supplyExpanded ? { display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}}>
-                        {text}
-                      </div>
-                      {isLong && !supplyExpanded && <button type="button" onClick={() => setSupplyExpanded(true)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.73rem', padding: '2px 0 0' }}>Read more…</button>}
-                      {isLong && supplyExpanded && <button type="button" onClick={() => setSupplyExpanded(false)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.73rem', padding: '2px 0 0' }}>Show less</button>}
+                      {tenkData.supplyChain}
                     </div>
                   )
                 })()}
@@ -2755,11 +2805,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Full-width block: Recent Dev + Value Prop + Accounting Policies */}
+          {/* Full-width block: Recent Dev + Value Prop + Accounting Policies — three separate boxes */}
           {mounted && (
-            <div style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px', marginBottom: 14, display: 'flex', gap: 0 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14, alignItems: 'flex-start' }}>
               {/* Recent Developments */}
-              <div style={{ flex: '1 1 0', minWidth: 0, paddingRight: 12 }}>
+              <div style={{ flex: '1 1 0', minWidth: 0, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Recent Developments</div>
                 {!recent8k && <div className="detail-multiples-empty">Loading…</div>}
                 {recent8k?.filings?.length === 0 && <div className="detail-multiples-empty">No recent 8-K filings found</div>}
@@ -2772,7 +2822,7 @@ export default function Home() {
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 8px', background: '#fff', border: '1px solid #ebebeb', borderRadius: 6, textDecoration: 'none' }}>
                           <span style={{ fontSize: '0.65rem', color: '#9ca3af', whiteSpace: 'nowrap', marginTop: 2 }}>{f.date}</span>
                           <div>
-                            <span style={{ fontSize: '0.74rem', color: '#1a2b3c', fontWeight: 600 }}>{typeLabel || '8-K'}</span>
+                            <span style={{ fontSize: '0.72rem', color: '#1a2b3c', fontWeight: 600 }}>{typeLabel || '8-K'}</span>
                             <span style={{ fontSize: '0.65rem', color: '#9ca3af', marginLeft: 6 }}>{f.items.map(it => it.code).join(', ')}</span>
                           </div>
                         </a>
@@ -2781,25 +2831,12 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <div style={{ width: 1, background: '#e8e8e8', flexShrink: 0, alignSelf: 'stretch' }} />
               {/* Value Proposition */}
-              <div style={{ flex: '1 1 0', minWidth: 0, padding: '0 12px' }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Value Proposition</div>
+              <div style={{ flex: '1 1 0', minWidth: 0, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>Value Proposition</div>
                 {selectedRow.description
-                  ? (() => {
-                      const text = selectedRow.description
-                      const isLong = text.length > 500
-                      return (
-                        <div style={{ fontSize: '0.73rem', color: '#374151', lineHeight: 1.55 }}>
-                          <div style={!descExpanded ? { display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}}>
-                            {text}
-                          </div>
-                          {isLong && !descExpanded && <button type="button" onClick={() => setDescExpanded(true)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.71rem', padding: '2px 0 0' }}>Read more…</button>}
-                          {isLong && descExpanded && <button type="button" onClick={() => setDescExpanded(false)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.71rem', padding: '2px 0 0' }}>Show less</button>}
-                        </div>
-                      )
-                    })()
-                  : <div style={{ fontSize: '0.8rem', color: '#aaa', fontStyle: 'italic' }}>Coming soon</div>
+                  ? <div style={{ fontSize: '0.73rem', color: '#374151', lineHeight: 1.55 }}>{selectedRow.description}</div>
+                  : <div style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic' }}>Coming soon</div>
                 }
               </div>
               {/* Accounting Policies */}
@@ -2809,19 +2846,16 @@ export default function Home() {
                 const hasAny = Object.values(a).some(Boolean)
                 if (!hasAny && !tenkLoading) return null
                 return (
-                  <>
-                    <div style={{ width: 1, background: '#e8e8e8', flexShrink: 0, alignSelf: 'stretch' }} />
-                    <div style={{ flex: '1 1 0', minWidth: 0, paddingLeft: 12 }}>
-                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Accounting Policies</div>
-                      {tenkLoading && <div className="detail-multiples-empty">Loading 10-K…</div>}
-                      {!tenkLoading && Object.entries(LABELS).map(([k, label]) => a[k] ? (
-                        <div key={k} style={{ marginBottom: 5 }}>
-                          <span style={{ fontSize: '0.63rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-                          <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: '#374151', lineHeight: 1.45 }}>{a[k]}</p>
-                        </div>
-                      ) : null)}
-                    </div>
-                  </>
+                  <div style={{ flex: '1 1 0', minWidth: 0, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>Accounting Policies</div>
+                    {tenkLoading && <div className="detail-multiples-empty">Loading 10-K…</div>}
+                    {!tenkLoading && Object.entries(LABELS).map(([k, label]) => a[k] ? (
+                      <div key={k} style={{ marginBottom: 5 }}>
+                        <span style={{ fontSize: '0.63rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: '#374151', lineHeight: 1.45 }}>{a[k]}</p>
+                      </div>
+                    ) : null)}
+                  </div>
                 )
               })()}
             </div>
@@ -2832,10 +2866,10 @@ export default function Home() {
             const red = signals.filter(s => s.status === 'triggered' && s.severity === 'red')
             return (
               <div style={{ background: 'rgba(231,111,81,0.04)', border: '1px solid rgba(231,111,81,0.25)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e76f51', marginBottom: 8 }}>🔴 Red Flags</div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#e76f51', marginBottom: 8 }}>🚩 Red Flags</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   {red.map((sig, i) => (
-                    <div key={i} style={{ fontSize: '0.73rem', color: '#1a2b3c' }}>
+                    <div key={i} style={{ fontSize: '0.72rem', color: '#1a2b3c' }}>
                       <span style={{ fontWeight: 600 }}>{sig.title}</span>
                       {sig.detail && <span style={{ color: '#6b7280', marginLeft: 6 }}>- {sig.detail}</span>}
                     </div>
@@ -2891,7 +2925,7 @@ export default function Home() {
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309', marginBottom: 8 }}>⚠ Things to Clarify</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {signals.filter(s => s.status === 'triggered' && s.severity === 'yellow').map((sig, i) => (
-                  <div key={i} style={{ fontSize: '0.73rem', color: '#1a2b3c' }}>
+                  <div key={i} style={{ fontSize: '0.72rem', color: '#1a2b3c' }}>
                     <span style={{ fontWeight: 600 }}>{sig.title}</span>
                     {sig.detail && <span style={{ color: '#6b7280', marginLeft: 6 }}>- {sig.detail}</span>}
                   </div>
@@ -2935,14 +2969,14 @@ export default function Home() {
               <div style={{ marginTop: 14, marginBottom: 10, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 9, padding: '10px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1a2b3c' }}>{ticker}</span>
-                    {closes.length > 0 && <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1a2b3c' }}>{selectedRow.price != null ? fP(selectedRow.price) : fP(closes[closes.length - 1])}</span>}
+                    <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1a2b3c' }}>{ticker}</span>
+                    {closes.length > 0 && <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1a2b3c' }}>{selectedRow.price != null ? fP(selectedRow.price) : fP(closes[closes.length - 1])}</span>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {['1y', '5y'].map(r => (
                         <button key={r} type="button" onClick={() => setChartRange(r)} style={{
-                          fontSize: '0.68rem', fontWeight: chartRange === r ? 700 : 500,
+                          fontSize: '0.85rem', fontWeight: chartRange === r ? 700 : 500,
                           padding: '2px 9px', borderRadius: 5,
                           border: chartRange === r ? '1.5px solid #2563eb' : '1.5px solid #e5e7eb',
                           background: chartRange === r ? '#eff6ff' : '#fff',
@@ -2950,10 +2984,10 @@ export default function Home() {
                           cursor: 'pointer',
                         }}>{r.toUpperCase()}</button>
                       ))}
+                      {selectedRow.beta != null && (
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1a2b3c', marginLeft: 6 }}>β {selectedRow.beta.toFixed(2)}</span>
+                      )}
                     </div>
-                    {selectedRow.beta != null && (
-                      <span style={{ fontSize: '1rem', fontWeight: 700, color: '#1a2b3c' }}>β {selectedRow.beta.toFixed(2)}</span>
-                    )}
                   </div>
                 </div>
                 {isLoading && closes.length === 0 && <div className="detail-multiples-empty">Loading chart…</div>}
@@ -2965,7 +2999,7 @@ export default function Home() {
                   const rng = maxV - minV || 1
                   const isUp = closes[closes.length - 1] >= closes[0]
                   const stroke = isUp ? '#2a9d8f' : '#e76f51'
-                  const W = 900, H = 170, mL = 42, mR = 8, mT = 12, mB = 22
+                  const W = 1400, H = 170, mL = 42, mR = 8, mT = 12, mB = 22
                   const cW = W - mL - mR, cH = H - mT - mB
                   const px = i => mL + (i / (closes.length - 1)) * cW
                   const py = v => mT + cH - ((v - minV) / rng) * cH
@@ -3044,7 +3078,7 @@ export default function Home() {
                   return (
                     <svg
                       viewBox={`0 0 ${W} ${H}`}
-                      style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
+                      style={{ width: '100%', maxWidth: 1400, display: 'block', cursor: 'crosshair' }}
                       xmlns="http://www.w3.org/2000/svg"
                       onMouseMove={e => {
                         const rect = e.currentTarget.getBoundingClientRect()
@@ -3063,24 +3097,24 @@ export default function Home() {
                       {yTicks.map((tv, ti) => (
                         <g key={ti}>
                           <line x1={mL} x2={W - mR} y1={py(tv)} y2={py(tv)} stroke="#f0f0f0" strokeWidth="0.6"/>
-                          <text x={mL - 4} y={py(tv) + 3.5} textAnchor="end" fontSize="7.5" fill="#9ca3af">{fP(tv)}</text>
+                          <text x={mL - 4} y={py(tv) + 3.5} textAnchor="end" fontSize="9" fill="#9ca3af">{fP(tv)}</text>
                         </g>
                       ))}
                       <line x1={mL} x2={W - mR} y1={mT + cH} y2={mT + cH} stroke="#e5e7eb" strokeWidth="0.7"/>
                       {xLabels.map(({ idx, label }, li) => (
-                        <text key={li} x={px(idx)} y={H - 4} textAnchor={li === 0 ? 'start' : li === xLabels.length - 1 ? 'end' : 'middle'} fontSize="7.5" fill="#9ca3af">{label}</text>
+                        <text key={li} x={px(idx)} y={H - 4} textAnchor={li === 0 ? 'start' : li === xLabels.length - 1 ? 'end' : 'middle'} fontSize="9" fill="#9ca3af">{label}</text>
                       ))}
                       <path d={`M ${px(0)},${mT + cH} L ${pts.split(' ').join(' L ')} L ${px(closes.length - 1)},${mT + cH} Z`} fill={isUp ? 'rgba(42,157,143,0.08)' : 'rgba(231,111,81,0.08)'}/>
                       <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.4" strokeLinecap="butt" strokeLinejoin="miter"/>
                       {earningsMarkers.map(({ idx, label }, mi) => {
                         const cx = px(idx), cy = py(closes[idx])
                         const markerColor = '#b45309'
-                        const triPoints = `${cx - 4.5},${cy} ${cx + 4.5},${cy} ${cx},${cy - 9}`
-                        const textY = Math.max(mT + 7, cy - 12)
+                        const triPoints = `${cx - 4},${cy} ${cx + 4},${cy} ${cx},${cy - 8}`
+                        const textY = Math.max(mT + 8, cy - 11)
                         return (
                           <g key={mi} filter="url(#earningShadow)">
                             <polygon points={triPoints} fill={markerColor}/>
-                            <text x={cx} y={textY} textAnchor="middle" fontSize="6.5" fill={markerColor} fontWeight="700" fontFamily="system-ui,sans-serif">{label}</text>
+                            <text x={cx} y={textY} textAnchor="middle" fontSize="8" fill={markerColor} fontWeight="700" fontFamily="system-ui,sans-serif">{label}</text>
                           </g>
                         )
                       })}
@@ -3088,36 +3122,36 @@ export default function Home() {
                         const cx = px(idx), cy = py(closes[idx])
                         const isUp = pct > 0
                         const annotColor = isUp ? '#15803d' : '#be123c'
-                        const stemLen = 16
-                        const labelY = isUp ? cy - stemLen - 8 : cy + stemLen + 8
-                        const stemY1 = isUp ? cy - 3 : cy + 3
+                        const stemLen = 10
+                        const labelY = isUp ? cy - stemLen - 5 : cy + stemLen + 5
+                        const stemY1 = isUp ? cy - 2 : cy + 2
                         const stemY2 = isUp ? cy - stemLen : cy + stemLen
                         const sign = isUp ? '+' : ''
                         const lbl = `${sign}${pct.toFixed(1)}%`
-                        const lW = lbl.length * 4.2 + 6
+                        const lW = lbl.length * 5 + 6
                         const anchor = cx + lW/2 > W - mR ? 'end' : cx - lW/2 < mL ? 'start' : 'middle'
-                        const lx = anchor === 'end' ? cx : anchor === 'start' ? cx : cx - lW/2
+                        const lx = anchor === 'end' ? cx - lW : anchor === 'start' ? cx : cx - lW/2
                         return (
                           <g key={ai}>
-                            <circle cx={cx} cy={cy} r="3" fill={annotColor} opacity="0.7"/>
-                            <line x1={cx} y1={stemY1} x2={cx} y2={stemY2} stroke={annotColor} strokeWidth="0.8" strokeDasharray="2,1.5" opacity="0.7"/>
-                            <rect x={lx} y={isUp ? labelY - 7 : labelY - 1} width={lW} height={9} rx="2" fill={annotColor} opacity="0.85"/>
-                            <text x={lx + lW/2} y={isUp ? labelY : labelY + 7} textAnchor="middle" fontSize="5.5" fill="#fff" fontWeight="700">{lbl}</text>
+                            <circle cx={cx} cy={cy} r="2.5" fill={annotColor} opacity="0.7"/>
+                            <line x1={cx} y1={stemY1} x2={cx} y2={stemY2} stroke={annotColor} strokeWidth="0.7" strokeDasharray="2,1.5" opacity="0.7"/>
+                            <rect x={lx} y={isUp ? labelY - 8 : labelY - 1} width={lW} height={9} rx="1.5" fill={annotColor} opacity="0.85"/>
+                            <text x={lx + lW/2} y={isUp ? labelY : labelY + 7} textAnchor="middle" fontSize="7" fill="#fff" fontWeight="700">{lbl}</text>
                           </g>
                         )
                       })}
                       {chartHover && chartHover.idx >= 0 && chartHover.idx < closes.length && (() => {
                         const hx = px(chartHover.idx), hy = py(chartHover.price)
-                        const labelW = 52, labelH = 13
+                        const labelW = 50, labelH = 13
                         const lx = Math.max(mL, Math.min(W - mR - labelW, hx - labelW / 2))
                         const fmtDate = sec => { const d = new Date(sec * 1000); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()] + ' ' + d.getUTCDate() }
                         return (
                           <g pointerEvents="none">
                             <line x1={hx} x2={hx} y1={mT} y2={mT + cH} stroke="#9ca3af" strokeWidth="0.8" strokeDasharray="3,2"/>
-                            <circle cx={hx} cy={hy} r="3.5" fill={stroke} stroke="#fff" strokeWidth="1.5"/>
-                            <rect x={lx} y={mT} width={labelW} height={labelH} rx="3" fill="rgba(26,43,60,0.88)"/>
+                            <circle cx={hx} cy={hy} r="2.5" fill={stroke} stroke="#fff" strokeWidth="1.2"/>
+                            <rect x={lx} y={mT} width={labelW} height={labelH} rx="2" fill="rgba(26,43,60,0.88)"/>
                             <text x={lx + labelW / 2} y={mT + 9} textAnchor="middle" fontSize="8" fill="#fff" fontWeight="700">{fP(chartHover.price)}</text>
-                            {chartHover.sec && <text x={hx} y={mT + cH + 14} textAnchor={chartHover.idx < closes.length * 0.15 ? 'start' : chartHover.idx > closes.length * 0.85 ? 'end' : 'middle'} fontSize="7" fill="#6b7280">{fmtDate(chartHover.sec)}</text>}
+                            {chartHover.sec && <text x={hx} y={mT + cH + 14} textAnchor={chartHover.idx < closes.length * 0.15 ? 'start' : chartHover.idx > closes.length * 0.85 ? 'end' : 'middle'} fontSize="8" fill="#6b7280">{fmtDate(chartHover.sec)}</text>}
                           </g>
                         )
                       })()}
@@ -3459,7 +3493,7 @@ export default function Home() {
                 <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
                   {cards.map(card => (
                     <div key={card.title} style={{ flex: '0 0 170px', background: card.color, border: `1px solid ${card.border}`, borderRadius: 8, padding: '8px 10px' }}>
-                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{card.title}</div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>{card.title}</div>
                       {card.rows.map(([label, val]) => row(label, val))}
                     </div>
                   ))}
@@ -3478,7 +3512,7 @@ export default function Home() {
               {(() => {
                 const bars = buildWaterfallBars(selectedRow)
                 const cardBase = { flex: '0 0 268px', minHeight: 168, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 9, padding: '8px 10px', display: 'flex', flexDirection: 'column' }
-                if (!bars) return <div style={cardBase}><div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: 4 }}>P&L Flow</div><div className="detail-multiples-empty">No P&L data</div></div>
+                if (!bars) return <div style={cardBase}><div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: 4 }}>P&L Flow</div><div className="detail-multiples-empty">No P&L data</div></div>
                 const W=268, H=120, mL=28, mB=36, mT=10, mR=4
                 const cW=W-mL-mR, cH=H-mT-mB, n=bars.length
                 const bW=Math.min(24, Math.floor(cW/n*0.63))
@@ -3495,7 +3529,7 @@ export default function Home() {
                 if(minVal<0) wTicks.unshift(minVal)
                 return (
                   <div style={{ ...cardBase, flex: '0 0 268px' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: 4 }}>P&L Flow {selectedRow.fyLabel ? `(${selectedRow.fyLabel})` : csvMode ? '(LTM)' : '(10-K)'}</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: 4 }}>P&L Flow {selectedRow.fyLabel ? `(${selectedRow.fyLabel})` : csvMode ? '(LTM)' : '(10-K)'}</div>
                     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
                       {/* Y-axis */}
                       <line x1={mL} x2={mL} y1={mT} y2={mT+cH} stroke="#e5e7eb" strokeWidth="0.8"/>
@@ -3538,7 +3572,7 @@ export default function Home() {
                 const cardBase = { flex: '0 0 165px', minHeight: 168, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 9, padding: '8px 10px', display: 'flex', flexDirection: 'column' }
                 if (financialsLoading) return (
                   <div key={key} style={cardBase}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#bbb', marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#9ca3af', marginBottom: 4 }}>{label}</div>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ height: 2, width: '70%', background: '#eee', borderRadius: 2 }} /></div>
                   </div>
                 )
@@ -3560,7 +3594,7 @@ export default function Home() {
                 return (
                   <div key={key} style={cardBase}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>{label}</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151' }}>{label}</span>
                       <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1a2b3c' }}>{fV(latest)}</span>
                     </div>
                     {latestGrowth != null && <div style={{ fontSize: '0.68rem', fontWeight: 600, marginBottom: 2, color: gCol(latestGrowth) }}>{latestGrowth>0?'+':''}{latestGrowth}% YoY</div>}
@@ -3726,14 +3760,14 @@ export default function Home() {
           {(() => {
             const QOE_METRICS = [
               { key: 'cashConversion', label: 'Cash Conv.', color: '#2563eb', unit: 'x', desc: 'OCF / Net Income' },
-              { key: 'fcfMargin',      label: 'FCF Margin',  color: '#059669', unit: '%', desc: 'FCF / Revenue' },
+              { key: 'fcfMargin',      label: 'FCF Margin',  color: '#15803d', unit: '%', desc: 'FCF / Revenue' },
               { key: 'netMargin',      label: 'Net Margin',  color: '#7c3aed', unit: '%', desc: 'NI / Revenue' },
               { key: 'ocfMargin',      label: 'OCF Margin',  color: '#d97706', unit: '%', desc: 'OCF / Revenue' },
               { key: 'accrualsRatio',  label: 'Accruals',    color: '#dc2626', unit: '%', desc: '(NI−OCF) / Assets' },
             ]
             const pts = qualityOfEarnings?.points ? [...qualityOfEarnings.points].reverse() : []
             const qual = qualityOfEarnings?.conclusion?.quality
-            const qualColor = qual === 'high' ? '#059669' : qual === 'low' ? '#dc2626' : '#d97706'
+            const qualColor = qual === 'high' ? '#15803d' : qual === 'low' ? '#dc2626' : '#d97706'
 
             const MiniChart = ({ metric }) => {
               const W = 165, H = 96, mL = 28, mR = 4, pad = 6
@@ -3756,12 +3790,12 @@ export default function Home() {
               const lastIdx = vals.reduce((acc, v, i) => v != null ? i : acc, 0)
               const trendDir = prev != null ? (last > prev ? 1 : last < prev ? -1 : 0) : null
               const isGood = metric.key === 'accrualsRatio' ? trendDir === -1 : trendDir === 1
-              const trendColor = trendDir === null ? '#9ca3af' : isGood ? '#059669' : '#dc2626'
+              const trendColor = trendDir === null ? '#9ca3af' : isGood ? '#15803d' : '#dc2626'
               const fmt = v => metric.unit === 'x' ? v.toFixed(2) + 'x' : v.toFixed(1) + '%'
               return (
                 <div style={{ flex: '0 0 165px', minHeight: 168, background: '#fff', border: '1px solid #e8e8e8', borderRadius: 9, padding: '8px 10px', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>{metric.label}</span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151' }}>{metric.label}</span>
                     <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1a2b3c' }}>{fmt(last)}</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 96, display: 'block' }}>
@@ -3778,7 +3812,7 @@ export default function Home() {
                     {pStr && <polyline points={pStr} fill="none" stroke={metric.color} strokeWidth="1.5" strokeLinejoin="round"/>}
                     {valid.length > 0 && <circle cx={x(lastIdx)} cy={y(last)} r="2.5" fill={metric.color}/>}
                   </svg>
-                  <div style={{ fontSize: '0.68rem', color: '#888', marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#9ca3af', fontSize: '0.6rem', fontStyle: 'italic' }}>{metric.desc}</span>
                     {trendDir !== null && <span style={{ color: trendColor, fontWeight: 700 }}>{trendDir > 0 ? '▲' : trendDir < 0 ? '▼' : '◆'}</span>}
                   </div>
@@ -3820,7 +3854,7 @@ export default function Home() {
                     {/* Snapshot metrics card */}
                     {qoe && (
                       <div style={{ flex: '0 0 180px', flexShrink: 0, background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 9, padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: 6 }}>QoE Snapshot</div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: 6 }}>QoE Snapshot</div>
                         {qoeRow('FCF Conversion', qoe.fcfConversion, v => v >= 0.9, v => v < 0.6, v => v.toFixed(2))}
                         {qoeRow('Accruals Ratio', qoe.accrualsRatio, v => Math.abs(v) < 0.05, v => v > 0.1, v => v.toFixed(3))}
                         {qoeRow('SBC % of NI', qoe.sbcPct, v => v < 15, v => v > 30, v => `${v.toFixed(1)}%`)}
@@ -3883,7 +3917,7 @@ export default function Home() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                           <span style={{ fontWeight: 700, color: '#1a2b3c', fontSize: '0.77rem' }}>{q.quarter}</span>
                           <span style={{
-                            fontSize: '0.58rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                            fontSize: '0.68rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4,
                             background: isBeat ? '#d1fae5' : isMiss ? '#fee2e2' : '#f3f4f6',
                             color: isBeat ? '#065f46' : isMiss ? '#991b1b' : '#9ca3af',
                             textTransform: 'uppercase',
@@ -3893,16 +3927,16 @@ export default function Home() {
                         </div>
                         <div style={{ borderTop: '1px solid #e8e8e8', paddingTop: 4, marginBottom: 4 }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>Revenue</div>
-                          <strong style={{ color: '#111', fontSize: '0.73rem' }}>{q.revenue || '-'}</strong>
+                          <strong style={{ color: '#1a2b3c', fontSize: '0.73rem' }}>{q.revenue || '-'}</strong>
                         </div>
                         <div style={{ borderTop: '1px solid #e8e8e8', paddingTop: 4, marginBottom: 4 }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>Net Inc</div>
-                          <strong style={{ color: '#111', fontSize: '0.73rem' }}>{q.netIncome || '-'}</strong>
+                          <strong style={{ color: '#1a2b3c', fontSize: '0.73rem' }}>{q.netIncome || '-'}</strong>
                         </div>
                         <div style={{ borderTop: '1px solid #e8e8e8', paddingTop: 4, marginBottom: 4 }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>EPS</div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                            <strong style={{ color: '#111', fontSize: '0.73rem' }}>{q.eps != null ? `$${q.eps.toFixed(2)}` : '-'}</strong>
+                            <strong style={{ color: '#1a2b3c', fontSize: '0.73rem' }}>{q.eps != null ? `$${q.eps.toFixed(2)}` : '-'}</strong>
                             {q.epsEstimate != null && (
                               <span style={{ color: '#9ca3af', fontSize: '0.6rem' }}>est ${q.epsEstimate.toFixed(2)}</span>
                             )}
@@ -3910,7 +3944,7 @@ export default function Home() {
                         </div>
                         <div style={{ borderTop: '1px solid #e8e8e8', paddingTop: 4 }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 1 }}>Surprise</div>
-                          <strong style={{ color: isBeat ? '#059669' : isMiss ? '#dc2626' : '#9ca3af', fontSize: '0.73rem' }}>
+                          <strong style={{ color: isBeat ? '#15803d' : isMiss ? '#dc2626' : '#9ca3af', fontSize: '0.73rem' }}>
                             {q.surprise != null
                               ? `${q.surprise >= 0 ? '+' : ''}${q.surprise.toFixed(2)} (${q.surprisePct >= 0 ? '+' : ''}${q.surprisePct?.toFixed(1)}%)`
                               : '-'}
@@ -4012,11 +4046,11 @@ export default function Home() {
                           return (
                             <div>
                               <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 6 }}>
-                                <div style={{ width: `${t.bullPct}%`, background: '#22c55e' }} />
-                                <div style={{ width: `${t.bearPct}%`, background: '#ef4444' }} />
+                                <div style={{ width: `${t.bullPct}%`, background: '#2a9d8f' }} />
+                                <div style={{ width: `${t.bearPct}%`, background: '#e76f51' }} />
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: '0.68rem', color: '#16a34a', fontWeight: 700 }}>Bullish {t.bullPct}% ({t.bull})</span>
+                                <span style={{ fontSize: '0.68rem', color: '#15803d', fontWeight: 700 }}>Bullish {t.bullPct}% ({t.bull})</span>
                                 <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 700 }}>Bearish {t.bearPct}% ({t.bear})</span>
                               </div>
                               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -4027,7 +4061,7 @@ export default function Home() {
                                   const isPos = net >= 0
                                   return (
                                     <div key={i} style={{ textAlign: 'center' }}>
-                                      <div style={{ fontSize: '0.58rem', color: '#9ca3af' }}>{q.date?.slice(0, 7)}</div>
+                                      <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>{q.date?.slice(0, 7)}</div>
                                       <div style={{ fontSize: '0.68rem', fontWeight: 700, color: isPos ? '#16a34a' : '#dc2626' }}>{isPos ? '+' : ''}{net}</div>
                                     </div>
                                   )
@@ -4108,7 +4142,7 @@ export default function Home() {
                         return (
                           <div style={{ display: 'flex', gap: 16 }}>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '0.62rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', marginBottom: 4 }}>New this quarter</div>
+                              <div style={{ fontSize: '0.69rem', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 4 }}>New this quarter</div>
                               {lang.newPhrases.length === 0
                                 ? <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>No standout new phrases</div>
                                 : lang.newPhrases.slice(0, 5).map((p, i) => (
@@ -4117,7 +4151,7 @@ export default function Home() {
                               }
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '0.62rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 4 }}>Dropped from language</div>
+                              <div style={{ fontSize: '0.69rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 4 }}>Dropped from language</div>
                               {lang.droppedPhrases.length === 0
                                 ? <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>No phrases notably dropped</div>
                                 : lang.droppedPhrases.slice(0, 5).map((p, i) => (
@@ -4148,7 +4182,7 @@ export default function Home() {
             <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 14 }}>
               {/* Industry name */}
               <div style={{ paddingRight: 20, flexShrink: 0 }}>
-                <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Industry</div>
+                <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Industry</div>
                 <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1a2b3c', whiteSpace: 'nowrap' }}>
                   {selectedRow.primaryIndustry || selectedRow.primarySector || '-'}
                 </div>
@@ -4163,13 +4197,14 @@ export default function Home() {
                 const share = competitorsData?.revenueShare
                 if (!tamInfo && share == null) return null
                 return (
-                  <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, paddingRight: 20, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, paddingRight: 20, flexShrink: 0, display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                     {tamInfo && (
                       <div>
-                        <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>TAM</div>
+                        <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>TAM</div>
                         <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1a2b3c', whiteSpace: 'nowrap' }}>
-                          {tamInfo.tam} <span style={{ fontSize: '0.75rem', color: '#2a9d8f', fontWeight: 700 }}>{tamInfo.cagr} CAGR</span>
+                          {tamInfo.tam}
                         </div>
+                        {tamInfo.cagr && <div style={{ fontSize: '0.75rem', color: '#2a9d8f', fontWeight: 700, marginTop: 1 }}>{tamInfo.cagr} CAGR</div>}
                         <div style={{ fontSize: '0.67rem', color: '#9ca3af', marginTop: 1 }}>{tamInfo.note}</div>
                       </div>
                     )}
@@ -4181,7 +4216,7 @@ export default function Home() {
                       const R = 22, circ = 2 * Math.PI * R
                       return (
                         <div style={{ flexShrink: 0, textAlign: 'center', borderLeft: tamInfo ? '1px solid #e5e7eb' : 'none', paddingLeft: tamInfo ? 16 : 0 }}>
-                          <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Mkt Share</div>
+                          <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Mkt Share</div>
                           <svg width="56" height="56" viewBox="0 0 56 56" style={{ display: 'block', margin: '0 auto' }}>
                             <circle cx="28" cy="28" r={R} fill="none" stroke="#e5e7eb" strokeWidth="9"/>
                             <circle cx="28" cy="28" r={R} fill="none" stroke="#3b82f6" strokeWidth="9"
@@ -4192,7 +4227,7 @@ export default function Home() {
                             <text x="28" y="33" textAnchor="middle" fontSize="11" fontWeight="700" fill="#1a2b3c">{share}%</text>
                           </svg>
                           {shareDelta != null && (
-                            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: shareDelta > 0 ? '#15803d' : '#be123c', marginTop: 2 }}>
+                            <div style={{ fontSize: '0.69rem', fontWeight: 600, color: shareDelta > 0 ? '#15803d' : '#be123c', marginTop: 2 }}>
                               {shareDelta > 0 ? '▲' : '▼'} {Math.abs(shareDelta).toFixed(1)}pp
                             </div>
                           )}
@@ -4208,17 +4243,17 @@ export default function Home() {
                 const mc = tenkData?.marketChar
                 if (!mc && !tenkLoading) return null
                 const cycColor = c => c === 'High' ? '#e76f51' : c === 'Moderate' ? '#f59e0b' : '#2a9d8f'
-                if (tenkLoading) return <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, fontSize: '0.68rem', color: '#aaa' }}>Loading…</div>
+                if (tenkLoading) return <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, fontSize: '0.68rem', color: '#9ca3af' }}>Loading…</div>
                 return (
-                  <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, paddingRight: 20, flexShrink: 0, maxWidth: 220 }}>
-                    <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Market Char</div>
+                  <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, paddingRight: 20, flexShrink: 0, maxWidth: 300 }}>
+                    <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Market Characteristics</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <div style={{ fontSize: '0.7rem' }}>
                         <span style={{ color: '#9ca3af' }}>Cyclicality: </span>
                         <span style={{ color: cycColor(mc.cyclicality), fontWeight: 700 }}>{mc.cyclicality || '?'}</span>
                       </div>
                       {mc.cyclicalEvidence && (
-                        <div style={{ fontSize: '0.62rem', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.4, marginTop: 1 }}>
+                        <div style={{ fontSize: '0.69rem', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.4, marginTop: 1 }}>
                           {mc.cyclicalEvidence.length > 120 ? mc.cyclicalEvidence.slice(0, 120) + '…' : mc.cyclicalEvidence}
                         </div>
                       )}
@@ -4239,7 +4274,7 @@ export default function Home() {
 
               {/* Key multiples */}
               <div style={{ borderLeft: '1px solid #c7d9f0', paddingLeft: 16, flexShrink: 0 }}>
-                <div style={{ fontSize: '0.6rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Key Multiples</div>
+                <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Key Multiples</div>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {(SECTOR_MULTIPLES[selectedRow.primarySector] || ['P/E', 'EV/EBITDA']).map(m => (
                     <span key={m} style={{ fontSize: '0.72rem', fontWeight: 600, background: '#e8f0fe', color: '#2563eb', padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap' }}>{m}</span>
@@ -4255,9 +4290,6 @@ export default function Home() {
           <div style={{ marginBottom: 16 }}>
             <div className="detail-multiples-chart-title" style={{ marginBottom: 10 }}>Competitive Landscape</div>
 
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
-              Competitors
-            </div>
             <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
 
               {/* Competitors table */}
@@ -4270,13 +4302,13 @@ export default function Home() {
                   const fPct = v => v == null ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`
                   const fX = v => v == null ? '-' : `${v.toFixed(1)}x`
                   const selectedTicker = getTickerSymbol(selectedRow.exchangeTicker || selectedRow.securityTickers)
-                  const metricTh = { padding: '3px 3px', textAlign: 'right', fontSize: '0.63rem', color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap', width: 54 }
+                  const metricTh = { padding: '3px 3px', textAlign: 'right', fontSize: '0.63rem', color: '#1a2b3c', fontWeight: 700, whiteSpace: 'nowrap', width: 54 }
                   const metricTd = { padding: '3px 3px', textAlign: 'right', width: 54, whiteSpace: 'nowrap' }
                   return (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid #e8e8e8' }}>
-                          <th style={{ padding: '3px 5px', textAlign: 'left', fontSize: '0.63rem', color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Company</th>
+                          <th style={{ padding: '3px 5px', textAlign: 'left', fontSize: '0.63rem', color: '#1a2b3c', fontWeight: 700 }}>Comparable Competitors</th>
                           {['Mkt Cap', 'Revenue', 'Rev Gr.', 'P/E', 'Net Mgn'].map(h => (
                             <th key={h} style={metricTh}>{h}</th>
                           ))}
@@ -4357,11 +4389,11 @@ export default function Home() {
               if (!stats.length) return null
               return (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1f3b5d', marginBottom: 8 }}>Trading Activity</div>
-                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Trading Activity</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {stats.map(({ label, val, color }, i) => (
-                      <div key={i}>
-                        <div style={{ fontSize: '0.62rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{label}</div>
+                      <div key={i} style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 7, padding: '6px 10px' }}>
+                        <div style={{ fontSize: '0.68rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{label}</div>
                         <div style={{ fontSize: '0.82rem', fontWeight: 700, color: color || '#1a2b3c' }}>{val}</div>
                       </div>
                     ))}
@@ -4377,7 +4409,7 @@ export default function Home() {
           {/* ── Ownership & Insider Activity ── */}
           {(insiderLoading || insiderData) && mounted && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Ownership &amp; Insider Activity</div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Ownership &amp; Insider Activity</div>
               {insiderLoading && <div className="detail-multiples-empty">Loading…</div>}
               {insiderData && (() => {
                   const { insider, institutional } = insiderData
@@ -4387,7 +4419,7 @@ export default function Home() {
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {/* Insider panel */}
                       <div style={{ flex: '1 1 280px', minWidth: 240, background: '#f9f9f9', border: '1px solid #eee', borderRadius: 9, padding: '10px 12px' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: 6 }}>Insider Transactions (6 mo)</div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: 6 }}>Insider Transactions (6 mo)</div>
                         {/* Buy/sell bar */}
                         {total > 0 && (
                           <div style={{ marginBottom: 8 }}>
@@ -4405,7 +4437,7 @@ export default function Home() {
                             </div>
                           </div>
                         )}
-                        {insider.transactions.length === 0 && <div style={{ fontSize: '0.75rem', color: '#bbb', fontStyle: 'italic' }}>No open-market transactions</div>}
+                        {insider.transactions.length === 0 && <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic' }}>No open-market transactions</div>}
                         {insider.transactions.slice(0, 6).map((t, i) => (
                           <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'baseline', fontSize: '0.72rem', padding: '3px 0', borderBottom: i < 5 ? '1px solid #f0f0f0' : 'none' }}>
                             <span style={{ color: t.type === 'Buy' ? '#15803d' : '#be123c', fontWeight: 700, minWidth: 28 }}>{t.type === 'Buy' ? '▲' : '▼'} {t.type}</span>
@@ -4419,7 +4451,7 @@ export default function Home() {
                       {institutional.holders.length > 0 && (
                         <div style={{ flex: '1 1 220px', minWidth: 200, background: '#f9f9f9', border: '1px solid #eee', borderRadius: 9, padding: '10px 12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>Institutional Holders</span>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151' }}>Institutional Holders</span>
                             <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>{institutional.totalPct.toFixed(1)}% total</span>
                           </div>
                           {institutional.holders.slice(0, 6).map((h, i) => (
@@ -4473,7 +4505,7 @@ export default function Home() {
                         const insiderPct = snapshotData?.insiderPct != null ? `${snapshotData.insiderPct.toFixed(1)}%` : '-'
                         return (
                           <div style={{ flex: '1 1 200px', minWidth: 180, background: '#f8f9ff', border: '1px solid #e0e7ff', borderRadius: 9, padding: '10px 12px' }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#555', marginBottom: 8 }}>Ownership Signals</div>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: 8 }}>Ownership Signals</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                                 <span style={{ color: '#6b7280' }}>Insider owned</span>
@@ -4502,7 +4534,7 @@ export default function Home() {
                                 <span style={{ fontWeight: 600, color: divergenceColor, textAlign: 'right', maxWidth: 110 }}>{divergence}</span>
                               </div>
                               <div style={{ marginTop: 4, padding: '4px 8px', borderRadius: 6, background: scoreColor + '18', border: `1px solid ${scoreColor}40` }}>
-                                <div style={{ fontSize: '0.62rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ownership Quality</div>
+                                <div style={{ fontSize: '0.69rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ownership Quality</div>
                                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: scoreColor }}>{scoreLabel}</div>
                               </div>
                             </div>
@@ -4514,6 +4546,100 @@ export default function Home() {
                 })()}
               </div>
             )}
+
+          {/* ── HF Holdings + Congressional Trades side by side ── */}
+          {mounted && (hfLoading || hfHoldings || congressLoading || congressTrades) && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-start' }}>
+
+              {/* HF Holdings (13F) */}
+              {(hfLoading || hfHoldings) && (
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Hedge Fund Holdings (13F)</div>
+                  {hfLoading && !hfHoldings && <div className="detail-multiples-empty">Loading 13F filings…</div>}
+                  {hfHoldings && (() => {
+                    const holdings = hfHoldings.holdings || []
+                    if (holdings.length === 0) return <div className="detail-multiples-empty">No positions found in recent 13F filings</div>
+                    const fmtShares = n => n >= 1e6 ? `${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : `${n}`
+                    const fmtVal = n => n >= 1e9 ? `$${(n/1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n/1e6).toFixed(0)}M` : `$${(n/1e3).toFixed(0)}K`
+                    const actionStyle = a => a === 'added' ? { color: '#15803d', label: '▲ Added' } : a === 'reduced' ? { color: '#dc2626', label: '▼ Reduced' } : a === 'new' ? { color: '#2563eb', label: '★ New' } : { color: '#6b7280', label: '= Flat' }
+                    return (
+                      <div style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
+                          <thead>
+                            <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb' }}>
+                              <th style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fund</th>
+                              <th style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Value</th>
+                              <th style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>QoQ Δ</th>
+                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {holdings.map((h, i) => {
+                              const as = actionStyle(h.action)
+                              return (
+                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                  <td style={{ padding: '6px 10px', fontWeight: 600, color: '#1a2b3c' }}>{h.fund}</td>
+                                  <td style={{ padding: '6px 8px', textAlign: 'right', color: '#374151' }}>{fmtVal(h.value)}</td>
+                                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: h.deltaPct > 0 ? '#15803d' : h.deltaPct < 0 ? '#dc2626' : '#6b7280' }}>
+                                    {h.deltaPct != null ? `${h.deltaPct > 0 ? '+' : ''}${h.deltaPct.toFixed(1)}%` : '—'}
+                                  </td>
+                                  <td style={{ padding: '6px 8px', fontWeight: 700, color: as.color }}>{as.label}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                        <div style={{ padding: '4px 10px', fontSize: '0.6rem', color: '#d1d5db' }}>SEC EDGAR 13F-HR · 45-day lag</div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {/* Congressional Trades */}
+              {(congressLoading || congressTrades) && (
+                <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Congressional Trades</div>
+                  {congressLoading && !congressTrades && <div className="detail-multiples-empty">Loading…</div>}
+                  {congressTrades && (() => {
+                    const trades = congressTrades.trades || []
+                    if (trades.length === 0) return <div className="detail-multiples-empty">No congressional trades on record</div>
+                    const txColor = t => /purchase/i.test(t) ? '#15803d' : /sale/i.test(t) ? '#dc2626' : '#6b7280'
+                    const chamberColor = c => c === 'Senate' ? '#7c3aed' : '#0369a1'
+                    return (
+                      <div style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
+                          <thead>
+                            <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb' }}>
+                              <th style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Member</th>
+                              <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Transaction</th>
+                              <th style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Amount</th>
+                              <th style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600, color: '#6b7280', fontSize: '0.63rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trades.map((t, i) => (
+                              <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                <td style={{ padding: '6px 10px' }}>
+                                  <div style={{ fontWeight: 600, color: '#1a2b3c' }}>{t.name}</div>
+                                  <span style={{ fontSize: '0.63rem', fontWeight: 700, color: chamberColor(t.chamber), background: t.chamber === 'Senate' ? '#ede9fe' : '#e0f2fe', borderRadius: 3, padding: '1px 4px' }}>{t.chamber}</span>
+                                </td>
+                                <td style={{ padding: '6px 8px', fontWeight: 700, color: txColor(t.transaction) }}>{t.transaction}</td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', color: '#374151' }}>{t.amount}</td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', color: '#9ca3af', fontSize: '0.65rem' }}>{t.date}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ padding: '4px 10px', fontSize: '0.6rem', color: '#d1d5db' }}>Senate/House Stock Watcher · STOCK Act · 45-day lag</div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
+            </div>
+          )}
 
           {/* News section */}
           <div style={{ marginTop: 18 }}>
@@ -4553,8 +4679,8 @@ export default function Home() {
                         style={{ display: 'block', padding: '7px 10px', borderRadius: 7, background: '#f9f9f9', border: '1px solid #e8e8e8', textDecoration: 'none' }}>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1a2b3c', lineHeight: 1.3 }}>{n.headline}</div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
-                          <span style={{ fontSize: '0.7rem', color: '#888' }}>{n.source}</span>
-                          <span style={{ fontSize: '0.7rem', color: '#bbb' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>{n.source}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
                             {n.datetime ? new Date(n.datetime * 1000).toLocaleDateString() : ''}
                           </span>
                         </div>
@@ -4877,6 +5003,22 @@ export default function Home() {
               </button>
             ))}
           </div>
+          <h2 style={{marginTop:12}}>TAM Growth</h2>
+          <div className="filter-list">
+            {tamGrowthCategories.map(cat => (
+              <button key={cat.id} type="button" className={`sector-button ${selectedTamGrowth.includes(cat.id) ? 'active' : ''}`}
+                onClick={() => setSelectedTamGrowth(prev => prev.includes(cat.id) ? prev.filter(x => x !== cat.id) : [...prev, cat.id])}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+          <h2 style={{marginTop:12}}>Market Share</h2>
+          <div className="filter-list">
+            <button type="button" className={`sector-button ${mktShareGainFilter ? 'active' : ''}`}
+              onClick={() => setMktShareGainFilter(v => !v)}>
+              Gaining share
+            </button>
+          </div>
         </aside>
 
         <div className="content">
@@ -5060,7 +5202,7 @@ export default function Home() {
                         <span style={{ fontSize: '0.65rem', background: '#e0f2fe', color: '#0369a1', padding: '1px 7px', borderRadius: 4, fontWeight: 600 }}>SPY</span>
                         {etf && <span style={{ fontSize: '0.65rem', background: '#f0fdf4', color: '#15803d', padding: '1px 7px', borderRadius: 4, fontWeight: 600 }}>{etf}</span>}
                       </div>
-                      <span style={{ fontSize: '0.62rem', color: '#d1d5db', marginLeft: 'auto' }}>vs S&amp;P 500{etf ? ` · ${etf}` : ''}</span>
+                      <span style={{ fontSize: '0.69rem', color: '#d1d5db', marginLeft: 'auto' }}>vs S&amp;P 500{etf ? ` · ${etf}` : ''}</span>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
@@ -5150,7 +5292,7 @@ export default function Home() {
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ fontSize: '0.62rem', color: '#d1d5db', marginTop: 4 }}>Color: <span style={{ color: '#15803d' }}>green = best in sector group</span>  <span style={{ color: '#dc2626' }}>red = worst</span></div>
+                    <div style={{ fontSize: '0.69rem', color: '#d1d5db', marginTop: 4 }}>Color: <span style={{ color: '#15803d' }}>green = best in sector group</span>  <span style={{ color: '#dc2626' }}>red = worst</span></div>
                   </div>
                 )
               })
@@ -5185,7 +5327,7 @@ export default function Home() {
                             }}>
                               <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#374151' }}>{MONTHS[+mo]} {+dy}, {yr}</span>
                               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: ev.col, marginTop: 1 }}>{ev.tick}</span>
-                              <span style={{ fontSize: '0.62rem', color: ev.past ? '#9ca3af' : '#2563eb', marginTop: 1 }}>
+                              <span style={{ fontSize: '0.69rem', color: ev.past ? '#9ca3af' : '#2563eb', marginTop: 1 }}>
                                 {ev.past ? 'Reported' : (() => { const mn = +mo; return `${mn <= 3 ? 'Q1' : mn <= 6 ? 'Q2' : mn <= 9 ? 'Q3' : 'Q4'} '${yr.slice(2)}` })()}
                               </span>
                             </div>
@@ -5342,7 +5484,7 @@ export default function Home() {
                     <td className="flow-cell-column">
                       {(() => {
                         const bars = buildWaterfallBars(row)
-                        if (!bars) return <div style={{ color: '#aaa', fontSize: '0.78rem', padding: '4px 2px' }}>No P&L data</div>
+                        if (!bars) return <div style={{ color: '#9ca3af', fontSize: '0.78rem', padding: '4px 2px' }}>No P&L data</div>
                         const SHORT = { 'Revenue': 'Rev', '- COGS': 'COGS', 'Gross Profit': 'GP', '- OpEx': 'OpEx', 'EBIT': 'EBIT', '+ D&A': 'D&A', '- Total Costs': 'Costs', 'EBITDA': 'EBITDA', '- Other': 'Other', 'Net Income': 'Net' }
                         const allY = bars.flatMap(b => [b.from, b.to])
                         const maxVal = Math.max(...allY)

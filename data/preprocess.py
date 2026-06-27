@@ -84,42 +84,42 @@ with open('data/vsv3.csv', encoding='utf-8-sig', errors='replace') as f:
         ticker = m.group(2).strip() if m else (g(1).split(':')[-1].strip().rstrip(')') if ':' in g(1) else g(1).strip())
 
         total_revenue = parse_float(g(14))
-        gross_profit  = parse_float(g(76))
+        gross_profit  = parse_float(g(75))
         ebitda        = parse_float(g(12))
-        ebit          = parse_float(g(67))
-        net_income    = parse_float(g(68))
+        ebit          = parse_float(g(66))
+        net_income    = parse_float(g(67))
         market_cap    = parse_float(g(15))
         tev           = parse_float(g(13))
 
         # Balance sheet & cash flow
-        cash             = parse_float(g(70))
-        total_assets     = parse_float(g(71))
-        net_ppe          = parse_float(g(72))
-        total_equity     = parse_float(g(73))
-        capex            = parse_float(g(74))
-        cfo              = parse_float(g(75))
-        sbc              = parse_float(g(77))
-        rd_exp           = parse_float(g(78))
-        interest_exp     = parse_float(g(81))
-        inventory        = parse_float(g(83))
-        total_receivables= parse_float(g(85))
-        nwc              = parse_float(g(88))
+        cash             = parse_float(g(69))
+        total_assets     = parse_float(g(70))
+        net_ppe          = parse_float(g(71))
+        total_equity     = parse_float(g(72))
+        capex            = parse_float(g(73))
+        cfo              = parse_float(g(74))
+        sbc              = parse_float(g(76))
+        rd_exp           = parse_float(g(77))
+        interest_exp     = parse_float(g(80))
+        inventory        = parse_float(g(82))
+        total_receivables= parse_float(g(84))
+        nwc              = parse_float(g(87))
 
         # Ownership / analyst fields
-        num_analysts     = parse_int(g(23))
-        research_docs_30d= parse_int(g(24))
-        ceo_owned_pct    = parse_float(g(64))
-        ceo_chg_pct      = parse_float(g(65))
-        hf_owned_pct     = parse_float(g(66))
+        num_analysts     = parse_int(g(22))
+        research_docs_30d= parse_int(g(23))
+        ceo_owned_pct    = parse_float(g(63))
+        ceo_chg_pct      = parse_float(g(64))
+        hf_owned_pct     = parse_float(g(65))
 
         # Short interest, D/E, 52-week price range, price, beta
-        short_interest   = parse_float(g(97))   # % of float
-        days_to_cover    = parse_float(g(98))
-        debt_equity      = parse_float(g(99))   # LT Debt/Equity %
-        week52_low       = parse_float(g(100))
-        week52_high      = parse_float(g(101))
-        price            = parse_float(g(102))
-        beta             = parse_float(g(103))
+        short_interest   = parse_float(g(96))   # % of float
+        days_to_cover    = parse_float(g(97))
+        debt_equity      = parse_float(g(98))   # LT Debt/Equity %
+        week52_low       = parse_float(g(99))
+        week52_high      = parse_float(g(100))
+        price            = parse_float(g(101))
+        beta             = parse_float(g(102))
 
         rev = total_revenue
         tev_ltm_rev      = safe_div(tev, rev)
@@ -142,10 +142,10 @@ with open('data/vsv3.csv', encoding='utf-8-sig', errors='replace') as f:
         net_debt         = round(tev - market_cap, 1) if tev and market_cap else None
         net_debt_ebitda  = safe_div(net_debt, ebitda) if net_debt is not None and ebitda and ebitda > 0 else None
 
-        desc = g(34) or g(17) or g(29)
-        product_name = g(28)
-        product_description = g(27)
-        website = g(45)
+        desc = g(33) or g(28)
+        product_name = g(27)
+        product_description = g(26)
+        website = g(44)
 
         companies.append({
             'id':              ticker or name[:20],
@@ -153,7 +153,7 @@ with open('data/vsv3.csv', encoding='utf-8-sig', errors='replace') as f:
             'ticker':          ticker,
             'exchangeTicker':  ticker_raw,
             'securityTickers': ticker_raw,
-            'exchange':        map_exchange(g(95)),
+            'exchange':        map_exchange(g(94)),
             'price':           price,
             'week52Low':       week52_low,
             'week52High':      week52_high,
@@ -203,15 +203,15 @@ with open('data/vsv3.csv', encoding='utf-8-sig', errors='replace') as f:
             'ceoOwnedPct':     ceo_owned_pct,
             'ceoChgPct':       ceo_chg_pct,
             'hfOwnedPct':      hf_owned_pct,
-            'primarySector':   map_sector(g(44)),
-            'primaryIndustry': g(43),
+            'primarySector':   map_sector(g(43)),
+            'primaryIndustry': g(42),
             'description':     desc,
             'productName':     product_name,
             'productDescription': product_description,
             'website':         website,
             'earningsCadence': '',
             'lastEarningsDate':  None,
-            'nextEarningsDate':  parse_date(g(22)),
+            'nextEarningsDate':  parse_date(g(21)),
             'guidance':          '',
             'earningsSurprise':  None,
             'earningsBeatMiss':  '',

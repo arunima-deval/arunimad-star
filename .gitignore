@@ -5,3 +5,5 @@ data/*.csv
 data/*.xls
 data/*.xlsx
 data/prices-cache.json
+public/vsv3.csv
+public/*.csv
