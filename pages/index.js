@@ -1557,10 +1557,6 @@ export default function Home() {
           return (typeof row.cfo === 'number' && row.cfo < 0) &&
                  (typeof row.netIncome === 'number' && row.netIncome < 0)
 
-        case 'multiple-compression':
-          return (typeof row.tevLtmRev === 'number' && row.tevLtmRev > 10) &&
-                 (typeof row.operatingMargin === 'number' && row.operatingMargin < 15)
-
         case 'insider-distribution':
           return (typeof row.ceoChgPct === 'number' && row.ceoChgPct < 0)
 
@@ -1588,9 +1584,57 @@ export default function Home() {
           return (typeof row.netDebtEbitda === 'number' && row.netDebtEbitda > 4) &&
                  (typeof row.operatingMargin === 'number' && row.operatingMargin < 10)
 
-        case 'float-insider-exit':
-          return (typeof row.ceoChgPct === 'number' && row.ceoChgPct < 0) &&
-                 (typeof row.hfOwnedPct === 'number' && row.hfOwnedPct < 0.5)
+        case 'chanos-zzzz-best':
+          // Fabricated revenues: revenue exists but CFO deeply negative relative to revenue, plus weak equity
+          return (typeof row.totalRevenue === 'number' && row.totalRevenue > 0) &&
+                 (typeof row.cfo === 'number' && row.cfo < 0) &&
+                 ((typeof row.totalEquity === 'number' && row.totalEquity < 0) ||
+                  (typeof row.grossMargin === 'number' && row.grossMargin < 0))
+
+        case 'dimenna-earnings-miss':
+          // Deteriorating margins + low analyst coverage suggesting holes in consensus
+          if (!sig) return (typeof row.operatingMargin === 'number' && row.operatingMargin < 5)
+          return has(
+            'Operating leverage deteriorating',
+            'Gross margin under pressure',
+            'Revenue growth not dropping to gross profit',
+            'Rule of 40 deteriorating',
+          )
+
+        case 'mcbear-structural':
+          // Secular decline: negative CFO + shrinking margins + no revenue conversion
+          if (!sig) return (typeof row.cfo === 'number' && row.cfo < 0) &&
+                          (typeof row.operatingMargin === 'number' && row.operatingMargin < 0)
+          return has(
+            'Revenue growth not dropping to gross profit',
+            'Operating leverage deteriorating',
+            'Backlog shrinking',
+            'Earnings not converting to cash',
+          )
+
+        case 'staley-insurance': {
+          const isInsurance = (row.primaryIndustry || '').toLowerCase().includes('insurance')
+          if (!isInsurance) return false
+          return (typeof row.totalEquity === 'number' && row.totalEquity < 0) ||
+                 (typeof row.debtEquity === 'number' && row.debtEquity > 200) ||
+                 (typeof row.netIncome === 'number' && row.netIncome < 0)
+        }
+
+        case 'feshbach-otc-promoter': {
+          const isMicrocap = typeof row.marketCap === 'number' && row.marketCap < 300
+          if (!isMicrocap) return false
+          return (typeof row.totalRevenue !== 'number' || row.totalRevenue <= 0 || row.totalRevenue < 10) ||
+                 (typeof row.cfo === 'number' && row.cfo < 0 &&
+                  typeof row.totalRevenue === 'number' && row.totalRevenue < 50)
+        }
+
+        case 'chanos-financial-leverage': {
+          const isFinancials = (row.primarySector || '') === 'Financial Services'
+          if (!isFinancials) return false
+          return (typeof row.debtEquity === 'number' && row.debtEquity > 300) ||
+                 (typeof row.totalEquity === 'number' && row.totalEquity < 0) ||
+                 (typeof row.interestCov === 'number' && row.interestCov < 1.5 && row.interestCov > 0)
+        }
 
         default: return true
       }
@@ -2212,7 +2256,6 @@ export default function Home() {
           { id: 'growth-quality',       label: 'Staley / Jiffy Lube',               desc: 'Revenue growth not dropping to gross profit, operating leverage deteriorating (Jiffy Lube)' },
           { id: 'ipo-flags',            label: 'Chanos / Baldwin-United',           desc: 'Cash burn accelerating, margins declining, growth decelerating post-IPO (Chanos)' },
           { id: 'zombie-burner',        label: 'DiMenna / Cash Burn',               desc: 'Negative CFO + negative net income - cash-burning zombie with no earnings' },
-          { id: 'multiple-compression', label: 'Robertson / Tiger Cub Short',       desc: 'TEV/Revenue >10x, EBIT margin <15% - multiple not justified by fundamentals' },
           { id: 'insider-distribution', label: 'Porter / Insider Exit',             desc: 'CEO reducing ownership QoQ - management distributing ahead of potential weakness' },
           { id: 'hf-crowded-exit',      label: 'HF Crowded Exit',                   desc: 'HF ownership >1% + CEO selling - crowded trade with insider exit signal' },
           { id: 'wc-deterioration',     label: 'WC Deterioration',                  desc: 'Negative NWC + negative net income - working capital stress with earnings weakness' },
@@ -2220,7 +2263,12 @@ export default function Home() {
           { id: 'inventory-buildup',    label: 'Feshbach / Kirschner Medical',      desc: 'Inventory >25% of revenue, gross margin <40% - inventory accumulating vs revenue' },
           { id: 'covenant-risk',        label: 'Feshbach / Balance Sheet Stress',   desc: 'Interest coverage <2x or negative equity - thin debt coverage or insolvent balance sheet' },
           { id: 'leveraged-slowing',    label: 'Levered + Slowing',                 desc: 'Net debt/EBITDA >4x, EBIT margin <10% - high leverage with thin operating buffer' },
-          { id: 'float-insider-exit',   label: 'Float + Insider Exit',              desc: 'CEO selling + low HF ownership (<0.5%) - insider exit with low institutional support' },
+          { id: 'chanos-zzzz-best',         label: 'Chanos / ZZZZ Best',                      desc: 'Fraud with no real revenues or contracts - accounting fraud and fabricated business activity' },
+          { id: 'dimenna-earnings-miss',    label: 'DiMenna / Earnings Disappointment',        desc: 'Holes in Wall Street consensus estimates - wait for stock to break before shorting earnings miss' },
+          { id: 'mcbear-structural',        label: 'McBear / Structural Industry Short',       desc: 'Key customers are broke or structurally impaired - macro forces creating secular earnings problem' },
+          { id: 'staley-insurance',         label: 'Staley / Insurance',                       desc: 'NAIC filing red flags, suspicious asset allocation or reserve issues - Insurance sector only',        sector: 'Insurance' },
+          { id: 'feshbach-otc-promoter',    label: 'Feshbach / OTC Promoter',                 desc: 'Dodgy stock promoters, no real revenues or assets, penny stock manipulation - Microcap only',        sector: 'Microcap' },
+          { id: 'chanos-financial-leverage',label: 'Chanos / Financial Leverage',              desc: 'Murky accounting + extreme leverage in financial companies - when EPS is taken at face value and analysis is avoided - Financials only', sector: 'Financials' },
         ]
         const allPresets = [...LONG_PRESETS, ...SHORT_PRESETS]
         const isLong = id => LONG_PRESETS.some(p => p.id === id)
@@ -2250,7 +2298,10 @@ export default function Home() {
                         maxWidth: 180,
                       }}
                     >
-                      <span style={{ fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
+                        {ps.sector && <span style={{ fontSize: '0.48rem', fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: isActive ? 'rgba(255,255,255,0.25)' : '#fef3c7', color: isActive ? '#fff' : '#92400e', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{ps.sector}</span>}
+                      </span>
                       <span style={{ fontSize: '0.55rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.3, whiteSpace: 'normal' }}>{ps.desc}</span>
                     </button>
                   )
