@@ -2237,7 +2237,7 @@ export default function Home() {
           { id: 'quality-compounder',  label: 'Munger / See\'s Candies',                desc: 'Gross margin >50%, positive CFO, low SBC/Rev - high-quality compounding business' },
           { id: 'cheap-quality',       label: 'Greenblatt / Magic Formula',             desc: 'TEV/EBITDA <12x, EBIT margin >15%, net income positive - quality at a reasonable price' },
           { id: 'insider-conviction',  label: 'Lynch / Insider Buying',                 desc: 'CEO owns shares and increased position QoQ - skin in the game signal' },
-          { id: 'hf-accumulation',     label: 'Druckenmiller / Pre-move Accumulation',  desc: 'HF ownership present, mid/small cap (<$10B) - institutional accumulation before move' },
+          { id: 'hf-accumulation',     label: 'Druckenmiller / Early Positioning',      desc: 'HF ownership present, mid/small cap (<$10B) - institutional accumulation before move' },
           { id: 'underfollowed',       label: 'Lynch / Hidden Gems',                    desc: '≤3 analysts covering, positive CFO, gross margin >20% - undiscovered quality' },
           { id: 'asset-light',         label: 'Buffett / Coca-Cola',                    desc: 'Net PP&E/Revenue <10%, gross margin >40%, positive CFO - capital-light compounder' },
           { id: 'net-cash-longs',      label: 'Graham / Net-Net',                       desc: 'Cash ≥ market cap, EBIT positive - trading below net cash with profitable operations' },
