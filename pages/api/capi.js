@@ -80,6 +80,7 @@ const parseYahooEarningsSummary = (result) => {
     primarySector: profile.sector || null,
     primaryIndustry: profile.industry || null,
     description: profile.longBusinessSummary || null,
+    fullTimeEmployees: typeof profile.fullTimeEmployees === 'number' ? profile.fullTimeEmployees : null,
   }
 }
 

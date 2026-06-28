@@ -267,7 +267,8 @@ tr.negative-net:hover{background:#ffe6ec}
 }
 .detail-panel-header h2{
   margin:0;
-  font-size:1.1rem;
+  font-size:0.72rem;
+  font-weight:700;
 }
 .detail-close{
   border:none;

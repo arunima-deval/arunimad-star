@@ -620,6 +620,7 @@ export default function Home() {
         primarySector: quote.primarySector || row.primarySector || '',
         primaryIndustry: quote.primaryIndustry || row.primaryIndustry || '',
         description: quote.description || row.description || '',
+        fullTimeEmployees: quote.fullTimeEmployees ?? row.fullTimeEmployees ?? null,
         // Earnings info from Yahoo
         earningsCadence: row.earningsCadence || quote.earningsCadence || '',
         lastEarningsDate: row.lastEarningsDate || quote.lastEarningsDate || null,
@@ -2277,32 +2278,31 @@ export default function Home() {
         const renderRow = (presets, side) => {
           const accentActive = side === 'long' ? '#15803d' : '#dc2626'
           const accentText   = side === 'long' ? '#6b7280' : '#9ca3af'
+          const cols = side === 'long' ? presets.length : 11
           return (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: '0.68rem', color: accentText, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            <div style={{ marginBottom: 5 }}>
+              <div style={{ fontSize: '0.62rem', color: accentText, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
                 {side === 'long' ? '▲ Long' : '▼ Short'}
               </div>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 3 }}>
                 {presets.map(ps => {
                   const isActive = activePresetId === ps.id
                   return (
                     <button key={ps.id} type="button"
                       onClick={() => setActivePresetId(prev => prev === ps.id ? null : ps.id)}
                       style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-                        padding: '4px 7px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1,
+                        padding: '3px 5px', borderRadius: 5, cursor: 'pointer', textAlign: 'left',
                         border: `1px solid ${isActive ? accentActive : side === 'long' ? '#bbf7d0' : '#fca5a5'}`,
                         background: isActive ? accentActive : side === 'long' ? '#f0fdf4' : '#fff5f5',
                         color: isActive ? '#fff' : side === 'long' ? '#14532d' : '#7f1d1d',
                         transition: 'all 0.1s',
-                        maxWidth: 180,
+                        minWidth: 0, width: '100%',
                       }}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
-                        <span style={{ fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
-                        {ps.sector && <span style={{ fontSize: '0.48rem', fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: isActive ? 'rgba(255,255,255,0.25)' : '#fef3c7', color: isActive ? '#fff' : '#92400e', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{ps.sector}</span>}
-                      </span>
-                      <span style={{ fontSize: '0.55rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.3, whiteSpace: 'normal' }}>{ps.desc}</span>
+                      <span style={{ fontSize: '0.55rem', fontWeight: 700, lineHeight: 1.2, wordBreak: 'break-word' }}>{ps.label}</span>
+                      {ps.sector && <span style={{ fontSize: '0.44rem', fontWeight: 700, padding: '1px 3px', borderRadius: 3, background: isActive ? 'rgba(255,255,255,0.3)' : '#fef3c7', color: isActive ? '#fff' : '#92400e', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 1 }}>{ps.sector}</span>}
+                      <span style={{ fontSize: '0.48rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.2, marginTop: 1 }}>{ps.desc}</span>
                     </button>
                   )
                 })}
@@ -2764,11 +2764,9 @@ export default function Home() {
             <div style={{ flex: 1, minWidth: 0 }}>
               {(signalsLoading || signals.length > 0) && (() => {
                 const triggered   = signals.filter(s => s.status === 'triggered')
-                const comingSoon  = signals.filter(s => s.status === 'coming_soon')
                 const reds        = triggered.filter(s => s.severity === 'red')
                 const yellows     = triggered.filter(s => s.severity === 'yellow')
                 const greens      = triggered.filter(s => s.severity === 'green')
-                const isOpen      = signalsPanelOpen === null ? reds.length > 0 : signalsPanelOpen
                 const SEV_ORDER   = ['red', 'yellow', 'green']
                 const sortedTriggered = SEV_ORDER.flatMap(sev => triggered.filter(s => s.severity === sev))
                 const SEV_STYLE = {
@@ -2778,48 +2776,33 @@ export default function Home() {
                 }
                 return (
                   <div style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
-                    <div role="button" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', background: '#fafafa', cursor: 'pointer', userSelect: 'none', borderBottom: isOpen ? '1px solid #eee' : 'none' }}
-                      onClick={() => setSignalsPanelOpen(o => !(o === null ? reds.length > 0 : o))}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', background: '#fafafa', borderBottom: '1px solid #eee' }}>
                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c' }}>Financial Signals</span>
                       <span style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 2 }}>
                         {reds.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e76f51', display: 'inline-block' }}/><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#e76f51' }}>{reds.length}</span></span>}
                         {yellows.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }}/><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#b45309' }}>{yellows.length}</span></span>}
                         {greens.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2a9d8f', display: 'inline-block' }}/><span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1f6f4c' }}>{greens.length}</span></span>}
-                        {comingSoon.length > 0 && <span style={{ fontSize: '0.68rem', color: '#9ca3af', fontWeight: 500 }}>⏱ {comingSoon.length}</span>}
                         {signalsLoading && <span style={{ fontSize: '0.68rem', color: '#9ca3af' }}>Loading…</span>}
                       </span>
-                      <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: '#9ca3af' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
-                    {isOpen && (
-                      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        {!signalsLoading && triggered.length === 0 && comingSoon.length === 0 && (
-                          <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic', padding: '4px 0' }}>No significant signals detected.</div>
-                        )}
-                        {sortedTriggered.map((s, i) => {
-                          const st = SEV_STYLE[s.severity] || SEV_STYLE.yellow
-                          return (
-                            <div key={i} style={{ borderLeft: `3px solid ${st.border}`, background: st.bg, borderRadius: '0 6px 6px 0', padding: '5px 8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-                                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: st.iconColor, minWidth: 12, textAlign: 'center', lineHeight: 1 }}>{st.icon}</span>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c' }}>{s.title}</span>
-                                <span style={{ fontSize: '0.6rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 2 }}>{s.category}</span>
-                              </div>
-                              <div style={{ fontSize: '0.69rem', color: '#374151', lineHeight: 1.4, paddingLeft: 17 }}>{s.detail}</div>
+                    <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {!signalsLoading && triggered.length === 0 && (
+                        <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic', padding: '4px 0' }}>No significant signals detected.</div>
+                      )}
+                      {sortedTriggered.map((s, i) => {
+                        const st = SEV_STYLE[s.severity] || SEV_STYLE.yellow
+                        return (
+                          <div key={i} style={{ borderLeft: `3px solid ${st.border}`, background: st.bg, borderRadius: '0 6px 6px 0', padding: '5px 8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: st.iconColor, minWidth: 12, textAlign: 'center', lineHeight: 1 }}>{st.icon}</span>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c' }}>{s.title}</span>
+                              <span style={{ fontSize: '0.6rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 2 }}>{s.category}</span>
                             </div>
-                          )
-                        })}
-                        {comingSoon.map((s, i) => (
-                          <div key={`cs-${i}`} style={{ borderLeft: '3px solid #d1d5db', background: '#f9fafb', borderRadius: '0 6px 6px 0', padding: '5px 8px', opacity: 0.8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <span style={{ fontSize: '0.7rem', color: '#9ca3af', minWidth: 12, textAlign: 'center', lineHeight: 1 }}>⏱</span>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#9ca3af' }}>{s.title}</span>
-                              <span style={{ fontSize: '0.6rem', color: '#d1d5db', textTransform: 'uppercase', letterSpacing: '0.04em', marginLeft: 2 }}>{s.category}</span>
-                            </div>
-                            <div style={{ fontSize: '0.69rem', color: '#9ca3af', fontStyle: 'italic', paddingLeft: 17, marginTop: 2 }}>Coming soon</div>
+                            <div style={{ fontSize: '0.69rem', color: '#374151', lineHeight: 1.4, paddingLeft: 17 }}>{s.detail}</div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )
+                      })}
+                    </div>
                   </div>
                 )
               })()}
@@ -3523,7 +3506,12 @@ export default function Home() {
                   })()],
                   ['Unearned Rev %', unearned],
                   ['Rec. Quality',   recQuality],
-                  ['Rev/Employee',   null],
+                  ['Rev/Employee',   (() => {
+                    const emp = selectedRow?.fullTimeEmployees
+                    if (!emp || emp <= 0 || !annRev) return null
+                    const rpe = (annRev * 1e6) / emp
+                    return rpe >= 1e6 ? `$${(rpe/1e6).toFixed(2)}M` : `$${Math.round(rpe/1e3)}K`
+                  })()],
                 ],
               },
               {
@@ -3542,9 +3530,9 @@ export default function Home() {
 
             return (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingBottom: 4 }}>
                   {cards.map(card => (
-                    <div key={card.title} style={{ flex: '0 0 170px', background: card.color, border: `1px solid ${card.border}`, borderRadius: 8, padding: '8px 10px' }}>
+                    <div key={card.title} style={{ flex: '1 1 155px', background: card.color, border: `1px solid ${card.border}`, borderRadius: 8, padding: '8px 10px' }}>
                       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 6 }}>{card.title}</div>
                       {card.rows.map(([label, val]) => row(label, val))}
                     </div>
@@ -3558,7 +3546,7 @@ export default function Home() {
           {mounted && (
           <div style={{ marginTop: 4, marginBottom: 4 }}>
             <div className="detail-multiples-chart-title" style={{ marginBottom: 8 }}>Charts</div>
-            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingBottom: 8, alignItems: 'stretch' }}>
 
               {/* 1. Compact P&L Waterfall card */}
               {(() => {
@@ -3901,7 +3889,7 @@ export default function Home() {
                 {qualityOfEarningsLoading && <div className="detail-multiples-empty">Loading…</div>}
                 {/* Mini trend charts + snapshot */}
                 {!qualityOfEarningsLoading && (pts.length > 0 || qoe) && (
-                  <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, alignItems: 'stretch' }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingBottom: 8, alignItems: 'stretch' }}>
                     {pts.length > 0 && QOE_METRICS.map(m => <MiniChart key={m.key} metric={m} />)}
                     {/* Snapshot metrics card */}
                     {qoe && (
@@ -3955,7 +3943,7 @@ export default function Home() {
               {!detailEarnings && <div className="detail-multiples-empty">…</div>}
               {detailEarnings?.history?.length === 0 && <div className="detail-multiples-empty">No history available</div>}
               {detailEarnings?.history?.length > 0 && (
-                <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 4 }}>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', paddingBottom: 4 }}>
                   {detailEarnings.history.slice(0, 8).reverse().map((q, i) => {
                     const isBeat = q.beatMiss === 'beat'
                     const isMiss = q.beatMiss === 'miss'
