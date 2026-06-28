@@ -2576,7 +2576,7 @@ export default function Home() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
             {/* Description */}
             <div style={{ flex: 2, minWidth: 0 }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 5 }}>Business Overview</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 5 }}>Business Overview</div>
               <p className="detail-description" style={{ margin: 0, marginBottom: selectedRow.website ? 4 : 0 }}>
                 {selectedRow.description || 'No description available.'}
               </p>
@@ -4429,7 +4429,7 @@ export default function Home() {
               if (!stats.length) return null
               return (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Trading Activity</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1a2b3c', marginBottom: 8 }}>Trading Activity</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {stats.map(({ label, val, color }, i) => (
                       <div key={i} style={{ background: '#f9f9f9', border: '1px solid #e8e8e8', borderRadius: 7, padding: '6px 10px' }}>

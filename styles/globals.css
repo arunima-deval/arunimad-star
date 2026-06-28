@@ -267,7 +267,7 @@ tr.negative-net:hover{background:#ffe6ec}
 }
 .detail-panel-header h2{
   margin:0;
-  font-size:0.72rem;
+  font-size:1.1rem;
   font-weight:700;
 }
 .detail-close{
@@ -288,7 +288,7 @@ tr.negative-net:hover{background:#ffe6ec}
 .detail-multiples{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:0.95rem;color:#374151}
 .detail-multiples div{background:#f8faff;padding:10px;border-radius:8px;border:1px solid #e2e8f0}
 .detail-multiples-chart{margin:16px 0 0}
-.detail-multiples-chart-title{font-size:0.72rem;font-weight:700;color:#1a2b3c;margin-bottom:8px}
+.detail-multiples-chart-title{font-size:1.1rem;font-weight:700;color:#1a2b3c;margin-bottom:8px}
 .detail-multiples-svg{width:100%;height:60px;background:#f8fbff;border:1px solid #dfe9f2;border-radius:10px}
 .detail-multiples-empty{padding:10px 12px;color:#6b7280;background:#fbfbfb;border:1px solid #e6e8ed;border-radius:10px}
 .detail-cal-card{background:#fcfcff;padding:12px;border-radius:10px;border:1px solid #e8eaf6;display:flex;flex-direction:column;gap:6px}
