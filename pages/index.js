@@ -640,12 +640,13 @@ export default function Home() {
     setCsvMode(true)
 
     try {
-      const res = await fetch('/api/csv-companies?v=8')
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setError(json.error || 'Failed to load company list')
+      const res = await fetch('/companies.json')
+      if (!res.ok) {
+        setError('Failed to load company list')
         return
       }
+      const companies = await res.json()
+      const json = { data: companies, total: companies.length }
 
       let rows = json.data || []
       setData(rows)
