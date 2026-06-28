@@ -2190,37 +2190,37 @@ export default function Home() {
       {/* Preset screens bar - Long + Short rows */}
       {viewMode === 'screener' && (() => {
         const LONG_PRESETS = [
-          { id: 'quality-compounder',  label: 'Quality Compounder', desc: 'Gross margin >50%, positive CFO, low SBC/Rev - high-quality compounding business' },
-          { id: 'cheap-quality',       label: 'Cheap Quality',      desc: 'TEV/EBITDA <12x, EBIT margin >15%, net income positive - quality at a reasonable price' },
-          { id: 'insider-conviction',  label: 'Insider Conviction', desc: 'CEO owns shares and increased position QoQ - skin in the game signal' },
-          { id: 'hf-accumulation',     label: 'HF Accumulation',    desc: 'HF ownership present, mid/small cap (<$10B) - institutional accumulation before move' },
-          { id: 'underfollowed',       label: 'Underfollowed',      desc: '≤3 analysts covering, positive CFO, gross margin >20% - undiscovered quality' },
-          { id: 'asset-light',         label: 'Asset-Light',        desc: 'Net PP&E/Revenue <10%, gross margin >40%, positive CFO - capital-light compounder' },
-          { id: 'net-cash-longs',      label: 'Net Cash',           desc: 'Cash ≥ market cap, EBIT positive - trading below net cash with profitable operations' },
-          { id: 'earnings-revision',   label: 'Earnings Revision',  desc: '>15 research docs in last 30 days + HF interest - analyst attention + institutional buying' },
-          { id: 'near-52w-low',        label: '52W Low',            desc: 'Price in bottom 20% of 52-week range, positive CFO - quality at cyclical trough' },
-          { id: 'low-beta',            label: 'Low Beta',           desc: 'Beta <0.8, positive CFO - defensive stocks with earnings quality' },
-          { id: 'high-short-interest', label: 'High SI',            desc: 'Short interest >15% of float, DTC >5 - heavily shorted with squeeze potential' },
+          { id: 'quality-compounder',  label: 'Munger / See\'s Candies',                desc: 'Gross margin >50%, positive CFO, low SBC/Rev - high-quality compounding business' },
+          { id: 'cheap-quality',       label: 'Greenblatt / Magic Formula',             desc: 'TEV/EBITDA <12x, EBIT margin >15%, net income positive - quality at a reasonable price' },
+          { id: 'insider-conviction',  label: 'Lynch / Insider Buying',                 desc: 'CEO owns shares and increased position QoQ - skin in the game signal' },
+          { id: 'hf-accumulation',     label: 'Druckenmiller / Pre-move Accumulation',  desc: 'HF ownership present, mid/small cap (<$10B) - institutional accumulation before move' },
+          { id: 'underfollowed',       label: 'Lynch / Hidden Gems',                    desc: '≤3 analysts covering, positive CFO, gross margin >20% - undiscovered quality' },
+          { id: 'asset-light',         label: 'Buffett / Coca-Cola',                    desc: 'Net PP&E/Revenue <10%, gross margin >40%, positive CFO - capital-light compounder' },
+          { id: 'net-cash-longs',      label: 'Graham / Net-Net',                       desc: 'Cash ≥ market cap, EBIT positive - trading below net cash with profitable operations' },
+          { id: 'earnings-revision',   label: 'O\'Neil / CANSLIM',                      desc: '>15 research docs in last 30 days + HF interest - analyst attention + institutional buying' },
+          { id: 'near-52w-low',        label: 'Templeton / Bargain Hunting',            desc: 'Price in bottom 20% of 52-week range, positive CFO - quality at cyclical trough' },
+          { id: 'low-beta',            label: 'Buffett / Defensive Quality',            desc: 'Beta <0.8, positive CFO - defensive stocks with earnings quality' },
+          { id: 'high-short-interest', label: 'Burry / Short Squeeze',                  desc: 'Short interest >15% of float, DTC >5 - heavily shorted with squeeze potential' },
         ]
         const SHORT_PRESETS = [
-          { id: 'chanos-roic',          label: 'Chanos ROIC',          desc: 'ROIC <8% or op margin <8% - declining return on invested capital' },
-          { id: 'inventory-recv',       label: 'Inventory / Recv',     desc: 'Inventory or receivables growing faster than revenue (Staley/Snapple/Cott)' },
-          { id: 'qoe',                  label: 'QoE',                  desc: 'FCF conversion <0.7 or accruals ratio >0.1 (Bildner)' },
-          { id: 'val-deteri',           label: 'Val + Deteri.',        desc: 'High multiple (P/E >40x or EV/Rev >10x) with margin compression (Robertson/DiMenna)' },
-          { id: 'bs-weakness',          label: 'Balance Sheet',        desc: 'Net debt/EBITDA >4x, goodwill >40% of assets, or share dilution >2% (Porter/Feshbach)' },
-          { id: 'mgmt-flags',           label: 'Mgmt Red Flags',       desc: 'Insider net selling with no buys (Porter/Feshbach)' },
-          { id: 'growth-quality',       label: 'Growth Quality',       desc: 'Revenue growth not dropping to gross profit, operating leverage deteriorating (Jiffy Lube)' },
-          { id: 'ipo-flags',            label: 'IPO Red Flags',        desc: 'Cash burn accelerating, margins declining, growth decelerating post-IPO (Chanos)' },
-          { id: 'zombie-burner',        label: 'Zombie Burner',        desc: 'Negative CFO + negative net income - cash-burning zombie with no earnings' },
-          { id: 'multiple-compression', label: 'Multiple Compression', desc: 'TEV/Revenue >10x, EBIT margin <15% - multiple not justified by fundamentals' },
-          { id: 'insider-distribution', label: 'Insider Exit',         desc: 'CEO reducing ownership QoQ - management distributing ahead of potential weakness' },
-          { id: 'hf-crowded-exit',      label: 'HF Crowded Exit',      desc: 'HF ownership >1% + CEO selling - crowded trade with insider exit signal' },
-          { id: 'wc-deterioration',     label: 'WC Deterioration',     desc: 'Negative NWC + negative net income - working capital stress with earnings weakness' },
-          { id: 'rd-treadmill',         label: 'R&D Treadmill',        desc: 'R&D >40% of revenue, negative CFO - spending heavily on R&D with no cash generation' },
-          { id: 'inventory-buildup',    label: 'Inventory Buildup',    desc: 'Inventory >25% of revenue, gross margin <40% - inventory accumulating vs revenue' },
-          { id: 'covenant-risk',        label: 'Covenant Risk',        desc: 'Interest coverage <2x or negative equity - thin debt coverage or insolvent balance sheet' },
-          { id: 'leveraged-slowing',    label: 'Levered + Slowing',    desc: 'Net debt/EBITDA >4x, EBIT margin <10% - high leverage with thin operating buffer' },
-          { id: 'float-insider-exit',   label: 'Float + Insider Exit', desc: 'CEO selling + low HF ownership (<0.5%) - insider exit with low institutional support' },
+          { id: 'chanos-roic',          label: 'Chanos / Enron',                    desc: 'ROIC <8% or op margin <8% - declining return on invested capital' },
+          { id: 'inventory-recv',       label: 'Staley / Snapple',                  desc: 'Inventory or receivables growing faster than revenue (Staley/Snapple/Cott)' },
+          { id: 'qoe',                  label: 'Bildner / J. Bildner & Sons',       desc: 'FCF conversion <0.7 or accruals ratio >0.1 (Bildner)' },
+          { id: 'val-deteri',           label: 'Robertson / Generic Drug Stocks',   desc: 'High multiple (P/E >40x or EV/Rev >10x) with margin compression (Robertson/DiMenna)' },
+          { id: 'bs-weakness',          label: 'Feshbach / Circle K',               desc: 'Net debt/EBITDA >4x, goodwill >40% of assets, or share dilution >2% (Porter/Feshbach)' },
+          { id: 'mgmt-flags',           label: 'Porter / Management Red Flags',     desc: 'Insider net selling with no buys (Porter/Feshbach)' },
+          { id: 'growth-quality',       label: 'Staley / Jiffy Lube',               desc: 'Revenue growth not dropping to gross profit, operating leverage deteriorating (Jiffy Lube)' },
+          { id: 'ipo-flags',            label: 'Chanos / Baldwin-United',           desc: 'Cash burn accelerating, margins declining, growth decelerating post-IPO (Chanos)' },
+          { id: 'zombie-burner',        label: 'DiMenna / Cash Burn',               desc: 'Negative CFO + negative net income - cash-burning zombie with no earnings' },
+          { id: 'multiple-compression', label: 'Robertson / Tiger Cub Short',       desc: 'TEV/Revenue >10x, EBIT margin <15% - multiple not justified by fundamentals' },
+          { id: 'insider-distribution', label: 'Porter / Insider Exit',             desc: 'CEO reducing ownership QoQ - management distributing ahead of potential weakness' },
+          { id: 'hf-crowded-exit',      label: 'HF Crowded Exit',                   desc: 'HF ownership >1% + CEO selling - crowded trade with insider exit signal' },
+          { id: 'wc-deterioration',     label: 'WC Deterioration',                  desc: 'Negative NWC + negative net income - working capital stress with earnings weakness' },
+          { id: 'rd-treadmill',         label: 'R&D Treadmill',                     desc: 'R&D >40% of revenue, negative CFO - spending heavily on R&D with no cash generation' },
+          { id: 'inventory-buildup',    label: 'Feshbach / Kirschner Medical',      desc: 'Inventory >25% of revenue, gross margin <40% - inventory accumulating vs revenue' },
+          { id: 'covenant-risk',        label: 'Feshbach / Balance Sheet Stress',   desc: 'Interest coverage <2x or negative equity - thin debt coverage or insolvent balance sheet' },
+          { id: 'leveraged-slowing',    label: 'Levered + Slowing',                 desc: 'Net debt/EBITDA >4x, EBIT margin <10% - high leverage with thin operating buffer' },
+          { id: 'float-insider-exit',   label: 'Float + Insider Exit',              desc: 'CEO selling + low HF ownership (<0.5%) - insider exit with low institutional support' },
         ]
         const allPresets = [...LONG_PRESETS, ...SHORT_PRESETS]
         const isLong = id => LONG_PRESETS.some(p => p.id === id)
@@ -2242,7 +2242,7 @@ export default function Home() {
                       onClick={() => setActivePresetId(prev => prev === ps.id ? null : ps.id)}
                       style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-                        padding: '5px 9px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+                        padding: '4px 7px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
                         border: `1px solid ${isActive ? accentActive : side === 'long' ? '#bbf7d0' : '#fca5a5'}`,
                         background: isActive ? accentActive : side === 'long' ? '#f0fdf4' : '#fff5f5',
                         color: isActive ? '#fff' : side === 'long' ? '#14532d' : '#7f1d1d',
@@ -2250,8 +2250,8 @@ export default function Home() {
                         maxWidth: 180,
                       }}
                     >
-                      <span style={{ fontSize: '0.66rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
-                      <span style={{ fontSize: '0.58rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.35, whiteSpace: 'normal' }}>{ps.desc}</span>
+                      <span style={{ fontSize: '0.62rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{ps.label}</span>
+                      <span style={{ fontSize: '0.55rem', fontWeight: 400, color: isActive ? 'rgba(255,255,255,0.82)' : side === 'long' ? '#166534' : '#991b1b', lineHeight: 1.3, whiteSpace: 'normal' }}>{ps.desc}</span>
                     </button>
                   )
                 })}
